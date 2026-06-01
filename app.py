@@ -793,6 +793,125 @@ def sync_portfolio():
         return jsonify({'error': str(e)}), 500
 
 
+# ==================== 宏观数据 ====================
+
+def get_macro_data():
+    """获取宏观市场数据"""
+    try:
+        result = {}
+        
+        # 美股指数 - 使用新浪财经
+        indices = {
+            'sp500': 'gb_dji',  # 道琼斯（近似S&P500）
+            'nasdaq': 'gb_ixic',  # 纳斯达克
+        }
+        
+        for name, code in indices.items():
+            try:
+                url = f'https://hq.sinajs.cn/list={code}'
+                headers = {'Referer': 'https://finance.sina.com.cn'}
+                r = session.get(url, headers=headers, timeout=10)
+                match = re.search(r'var hq_str_\w+="(.+)"', r.text)
+                if match:
+                    fields = match.group(1).split(',')
+                    if len(fields) > 5:
+                        price = float(fields[1]) if fields[1] else 0
+                        change = float(fields[4]) if fields[4] else 0
+                        prev_close = float(fields[5]) if fields[5] else 0
+                        change_pct = (change / prev_close * 100) if prev_close > 0 else 0
+                        result[name] = {
+                            'price': round(price, 2),
+                            'change': round(change, 2),
+                            'change_pct': round(change_pct, 2)
+                        }
+            except Exception as e:
+                print(f"Error fetching {name}: {e}")
+        
+        # 商品 - 使用新浪财经
+        commodities = {
+            'oil': 'hf_CL',  # WTI原油
+            'gold': 'hf_GC',  # 黄金
+            'silver': 'hf_SI',  # 白银
+            'copper': 'hf_HG'  # 铜
+        }
+        
+        for name, code in commodities.items():
+            try:
+                url = f'https://hq.sinajs.cn/list={code}'
+                headers = {'Referer': 'https://finance.sina.com.cn'}
+                r = session.get(url, headers=headers, timeout=10)
+                match = re.search(r'var hq_str_\w+="(.+)"', r.text)
+                if match:
+                    fields = match.group(1).split(',')
+                    if len(fields) > 8:
+                        price = float(fields[0]) if fields[0] else 0
+                        change = float(fields[1]) if fields[1] else 0
+                        result[name] = {
+                            'price': round(price, 2),
+                            'change': round(change, 2)
+                        }
+            except Exception as e:
+                print(f"Error fetching {name}: {e}")
+        
+        # 外汇 - 使用新浪财经
+        fx = {
+            'dxy': 'hf_DXY',  # 美元指数
+            'eurusd': 'eurusd',
+            'usdjpy': 'usdjpy',
+            'usdcnh': 'usdcnh'
+        }
+        
+        for name, code in fx.items():
+            try:
+                url = f'https://hq.sinajs.cn/list={code}'
+                headers = {'Referer': 'https://finance.sina.com.cn'}
+                r = session.get(url, headers=headers, timeout=10)
+                match = re.search(r'var hq_str_\w+="(.+)"', r.text)
+                if match:
+                    fields = match.group(1).split(',')
+                    if len(fields) > 1:
+                        price = float(fields[0]) if fields[0] else 0
+                        result[name] = {'price': round(price, 4)}
+            except Exception as e:
+                print(f"Error fetching {name}: {e}")
+        
+        # 加密货币 - 使用CoinGecko API
+        try:
+            url = 'https://api.coingecko.com/api/v3/simple/price'
+            params = {'ids': 'bitcoin,ethereum', 'vs_currencies': 'usd', 'include_24hr_change': 'true'}
+            r = session.get(url, params=params, timeout=10)
+            data = r.json()
+            if 'bitcoin' in data:
+                result['btc'] = {
+                    'price': data['bitcoin']['usd'],
+                    'change_pct': round(data['bitcoin'].get('usd_24h_change', 0), 2)
+                }
+            if 'ethereum' in data:
+                result['eth'] = {
+                    'price': data['ethereum']['usd'],
+                    'change_pct': round(data['ethereum'].get('usd_24h_change', 0), 2)
+                }
+        except Exception as e:
+            print(f"Error fetching crypto: {e}")
+        
+        result['timestamp'] = datetime.now().isoformat()
+        return result
+    except Exception as e:
+        print(f"Error in get_macro_data: {e}")
+        traceback.print_exc()
+        return {}
+
+
+@app.route('/api/macro/data')
+def macro_data():
+    """宏观市场数据"""
+    try:
+        data = get_macro_data()
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ==================== Obsidian笔记库 ====================
 
 from obsidian import get_folders, get_notes, get_note_content, search_notes
