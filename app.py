@@ -752,6 +752,47 @@ def update_portfolio_prices():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/portfolio/sync', methods=['POST'])
+def sync_portfolio():
+    """同步持仓数据到云端数据库"""
+    try:
+        data = request.get_json()
+        holdings = data.get('holdings', [])
+        industry = data.get('industry', [])
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # 清空旧数据
+        cursor.execute("DELETE FROM holdings")
+        
+        # 插入新持仓
+        for h in holdings:
+            cursor.execute("""
+                INSERT INTO holdings (stock_code, stock_name, quantity, cost_price, current_price,
+                    market_value, profit_loss, profit_rate, industry, position_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (h['stock_code'], h['stock_name'], h['quantity'], h['cost_price'],
+                  h['current_price'], h['market_value'], h['profit_loss'], h['profit_rate'],
+                  h.get('industry', ''), h.get('position_ratio', 0)))
+        
+        # 更新行业配置
+        if industry:
+            cursor.execute("DELETE FROM industry_allocation")
+            for ind in industry:
+                cursor.execute("""
+                    INSERT INTO industry_allocation (name, value, amount, stocks)
+                    VALUES (?, ?, ?, ?)
+                """, (ind['name'], ind['value'], ind['amount'], ind.get('stocks', '')))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'status': 'ok', 'holdings_count': len(holdings)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ==================== Obsidian笔记库 ====================
 
 from obsidian import get_folders, get_notes, get_note_content, search_notes
