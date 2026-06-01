@@ -738,6 +738,72 @@ def ai_models():
         return jsonify({'error': str(e)}), 500
 
 
+# ==================== 股价更新 ====================
+
+from update_prices import update_prices
+
+@app.route('/api/portfolio/update-prices', methods=['POST'])
+def update_portfolio_prices():
+    """手动触发股价更新"""
+    try:
+        result = update_prices()
+        return jsonify({'status': 'ok', 'result': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== Obsidian笔记库 ====================
+
+from obsidian import get_folders, get_notes, get_note_content, search_notes
+
+@app.route('/api/obsidian/folders')
+def obsidian_folders():
+    """获取Obsidian目录结构"""
+    try:
+        data = get_folders()
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/obsidian/notes')
+def obsidian_notes():
+    """获取笔记列表"""
+    try:
+        folder = request.args.get('folder', '')
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        search = request.args.get('search', '')
+        data = get_notes(folder=folder or None, page=page, per_page=per_page, search=search or None)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/obsidian/note/<path:note_path>')
+def obsidian_note_content(note_path):
+    """获取笔记内容"""
+    try:
+        data = get_note_content(note_path)
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({'error': 'Note not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/obsidian/search')
+def obsidian_search():
+    """搜索笔记"""
+    try:
+        query = request.args.get('q', '')
+        limit = int(request.args.get('limit', 50))
+        if not query:
+            return jsonify({'error': 'Query required'}), 400
+        data = search_notes(query, limit=limit)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ==================== 启动 ====================
 
 if __name__ == '__main__':
